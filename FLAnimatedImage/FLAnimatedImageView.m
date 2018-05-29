@@ -122,6 +122,7 @@
             self.loopCountdown = NSUIntegerMax;
         }
         self.accumulator = 0.0;
+        self.contentScaleFactor = animatedImage.posterImage.scale;
         
         // Start animating after the new animated image has been set.
         [self updateShouldAnimate];

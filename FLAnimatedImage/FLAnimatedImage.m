@@ -63,6 +63,7 @@ typedef NS_ENUM(NSUInteger, FLAnimatedImageFrameCacheSize) {
 @property (nonatomic, assign) NSUInteger memoryWarningCount;
 @property (nonatomic, strong, readonly) dispatch_queue_t serialQueue;
 @property (nonatomic, strong, readonly) __attribute__((NSObject)) CGImageSourceRef imageSource;
+@property (nonatomic) CGFloat scale;
 
 // The weak proxy is used to break retain cycles with delayed actions from memory warnings.
 // We are lying about the actual type here to gain static type checking and eliminate casts.
@@ -179,6 +180,11 @@ static NSHashTable *allAnimatedImagesWeak;
 
 - (instancetype)initWithAnimatedGIFData:(NSData *)data optimalFrameCacheSize:(NSUInteger)optimalFrameCacheSize predrawingEnabled:(BOOL)isPredrawingEnabled
 {
+    return [self initWithAnimatedGIFData:data optimalFrameCacheSize:0 predrawingEnabled:YES scale:1];
+}
+
+- (instancetype)initWithAnimatedGIFData:(NSData *)data optimalFrameCacheSize:(NSUInteger)optimalFrameCacheSize predrawingEnabled:(BOOL)isPredrawingEnabled scale:(CGFloat)scale
+{
     // Early return if no data supplied!
     BOOL hasData = ([data length] > 0);
     if (!hasData) {
@@ -194,6 +200,7 @@ static NSHashTable *allAnimatedImagesWeak;
         // However, we will use the `_imageSource` as handler to the image data throughout our life cycle.
         _data = data;
         _predrawingEnabled = isPredrawingEnabled;
+        _scale = scale;
         
         // Initialize internal data structures
         _cachedFramesForIndexes = [[NSMutableDictionary alloc] init];
@@ -238,7 +245,7 @@ static NSHashTable *allAnimatedImagesWeak;
             @autoreleasepool {
                 CGImageRef frameImageRef = CGImageSourceCreateImageAtIndex(_imageSource, i, NULL);
                 if (frameImageRef) {
-                    UIImage *frameImage = [UIImage imageWithCGImage:frameImageRef];
+                    UIImage *frameImage = [UIImage imageWithCGImage:frameImageRef scale:_scale orientation:UIImageOrientationUp];
                     // Check for valid `frameImage` before parsing its properties as frames can be corrupted (and `frameImage` even `nil` when `frameImageRef` was valid).
                     if (frameImage) {
                         // Set poster image
@@ -520,7 +527,7 @@ static NSHashTable *allAnimatedImagesWeak;
         return nil;
     }
 
-    UIImage *image = [UIImage imageWithCGImage:imageRef];
+    UIImage *image = [UIImage imageWithCGImage:imageRef scale:_scale orientation:UIImageOrientationUp];
     CFRelease(imageRef);
     
     // Loading in the image object is only half the work, the displaying image view would still have to synchronosly wait and decode the image, so we go ahead and do that here on the background thread.
@@ -669,8 +676,8 @@ static NSHashTable *allAnimatedImagesWeak;
     
     // "In iOS 4.0 and later, and OS X v10.6 and later, you can pass NULL if you want Quartz to allocate memory for the bitmap." (source: docs)
     void *data = NULL;
-    size_t width = imageToPredraw.size.width;
-    size_t height = imageToPredraw.size.height;
+    size_t width = imageToPredraw.size.width * imageToPredraw.scale;
+    size_t height = imageToPredraw.size.height * imageToPredraw.scale;
     size_t bitsPerComponent = CHAR_BIT;
     
     size_t bitsPerPixel = (bitsPerComponent * numberOfComponents);
@@ -703,7 +710,7 @@ static NSHashTable *allAnimatedImagesWeak;
     }
     
     // Draw image in bitmap context and create image by preserving receiver's properties.
-    CGContextDrawImage(bitmapContextRef, CGRectMake(0.0, 0.0, imageToPredraw.size.width, imageToPredraw.size.height), imageToPredraw.CGImage);
+    CGContextDrawImage(bitmapContextRef, CGRectMake(0.0, 0.0, width, height), imageToPredraw.CGImage);
     CGImageRef predrawnImageRef = CGBitmapContextCreateImage(bitmapContextRef);
     UIImage *predrawnImage = [UIImage imageWithCGImage:predrawnImageRef scale:imageToPredraw.scale orientation:imageToPredraw.imageOrientation];
     CGImageRelease(predrawnImageRef);
