@@ -91,6 +91,8 @@
     if (@available(iOS 11.0, *)) {
         self.accessibilityIgnoresInvertColors = YES;
     }
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_accessibilityReducedMotionChanged:) name:UIAccessibilityReduceMotionStatusDidChangeNotification object:nil];
 }
 
 
@@ -134,6 +136,14 @@
     }
 }
 
+- (void)setIgnoresAccessibilityReduceMotion:(BOOL)ignoresAccessibilityReduceMotion
+{
+    if (_ignoresAccessibilityReduceMotion == ignoresAccessibilityReduceMotion) {
+        return;
+    }
+    _ignoresAccessibilityReduceMotion = ignoresAccessibilityReduceMotion;
+    [self _updateAnimationForCurrentAccessibilitySettings];
+}
 
 #pragma mark - Life Cycle
 
@@ -141,6 +151,7 @@
 {
     // Removes the display link from all run loop modes.
     [_displayLink invalidate];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIAccessibilityReduceMotionStatusDidChangeNotification object:nil];
 }
 
 
@@ -286,7 +297,7 @@ static NSUInteger gcd(NSUInteger a, NSUInteger b)
 
 - (void)startAnimating
 {
-    if (self.animatedImage) {
+    if (self.animatedImage && [self _accessibilitySettingsAllowAnimation]) {
         // Lazily create the display link.
         if (!self.displayLink) {
             // It is important to note the use of a weak proxy here to avoid a retain cycle. `-displayLinkWithTarget:selector:`
@@ -334,7 +345,7 @@ static NSUInteger gcd(NSUInteger a, NSUInteger b)
 {
     BOOL isAnimating = NO;
     if (self.animatedImage) {
-        isAnimating = self.displayLink && !self.displayLink.isPaused;
+        isAnimating = self.displayLink && !self.displayLink.isPaused && [self _accessibilitySettingsAllowAnimation];
     } else {
         isAnimating = [super isAnimating];
     }
@@ -360,10 +371,14 @@ static NSUInteger gcd(NSUInteger a, NSUInteger b)
 // Just update our cached value whenever the animated image or visibility (window, superview, hidden, alpha) is changed.
 - (void)updateShouldAnimate
 {
+    // Unless the client explicitly opts out, ignore requests to start animating if "Reduce Motion" is enabled.
+    if (![self _accessibilitySettingsAllowAnimation]) {
+        self.shouldAnimate = NO;
+        return;
+    }
     BOOL isVisible = self.window && self.superview && ![self isHidden] && self.alpha > 0.0;
     self.shouldAnimate = self.animatedImage && isVisible;
 }
-
 
 - (void)displayDidRefresh:(CADisplayLink *)displayLink
 {
@@ -373,7 +388,7 @@ static NSUInteger gcd(NSUInteger a, NSUInteger b)
         FLLog(FLLogLevelWarn, @"Trying to animate image when we shouldn't: %@", self);
         return;
     }
-    
+
     NSNumber *delayTimeNumber = [self.animatedImage.delayTimesForIndexes objectForKey:@(self.currentFrameIndex)];
     // If we don't have a frame delay (e.g. corrupt frame), don't update the view but skip the playhead to the next frame (in else-block).
     if (delayTimeNumber) {
@@ -430,6 +445,23 @@ static NSUInteger gcd(NSUInteger a, NSUInteger b)
     return [NSProcessInfo processInfo].activeProcessorCount > 1 ? NSRunLoopCommonModes : NSDefaultRunLoopMode;
 }
 
+- (BOOL)_accessibilitySettingsAllowAnimation
+{
+    return _ignoresAccessibilityReduceMotion || !UIAccessibilityIsReduceMotionEnabled();
+}
+
+- (void)_accessibilityReducedMotionChanged:(id)sender
+{
+    [self _updateAnimationForCurrentAccessibilitySettings];
+}
+
+- (void)_updateAnimationForCurrentAccessibilitySettings
+{
+    if (![self _accessibilitySettingsAllowAnimation]) {
+        self.displayLink.paused = YES;
+    }
+    [self updateShouldAnimate];
+}
 
 #pragma mark - CALayerDelegate (Informal)
 #pragma mark Providing the Layer's Content

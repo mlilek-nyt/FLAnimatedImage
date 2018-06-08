@@ -33,4 +33,12 @@
 // To keep scrolling smooth on single-core devices such as iPhone 3GS/4 and iPod Touch 4th gen, the default run loop mode is NSDefaultRunLoopMode. Otherwise, the default is NSDefaultRunLoopMode.
 @property (nonatomic, copy) NSString *runLoopMode;
 
+/**
+ Set this to `YES` if the image view should ignore the system's "Reduce Motion"
+ setting and play the `animatedImage` anyway.
+
+ Defaults to `NO`, meaning the image will _not_ animate when a user has "Reduce
+ Motion" turned on.
+ */
+@property (nonatomic) BOOL ignoresAccessibilityReduceMotion;
 @end
