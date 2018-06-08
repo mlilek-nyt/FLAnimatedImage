@@ -86,7 +86,7 @@
     
     if (!self.playPauseButton) {
         self.playPauseButton = [[RSPlayPauseButton alloc] init];
-        self.playPauseButton.paused = NO;
+        self.playPauseButton.paused = ![self.imageView isAnimating];
         CGRect frame = self.playPauseButton.frame;
         frame.origin = CGPointMake(CGRectGetMaxX(self.bounds) - frame.size.width - kMargin, CGRectGetMaxY(self.bounds) - frame.size.height - kMargin);
         self.playPauseButton.frame = frame;
@@ -116,13 +116,8 @@
 
 - (void)playPauseButtonPressed:(RSPlayPauseButton *)playPauseButton
 {
-    if (self.playPauseButton.isPaused) {
-        [self.playPauseButton setPaused:NO animated:YES];
-        [self.imageView startAnimating];
-    } else {
-        [self.playPauseButton setPaused:YES animated:YES];
-        [self.imageView stopAnimating];
-    }
+    self.playPauseButton.isPaused ? [self.imageView startAnimating] : [self.imageView stopAnimating];
+    [self.playPauseButton setPaused:![self.imageView isAnimating] animated:YES];
 }
 
 
